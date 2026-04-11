@@ -1,0 +1,12 @@
+{
+  "name": "@adminyo/cli-win32-x64",
+  "version": "0.2.0",
+  "description": "Adminyo native binary for Windows x64",
+  "license": "MIT",
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "bin": {
+    "nyo": "nyo.exe"
+  },
+  "files": ["nyo.exe"]
+}

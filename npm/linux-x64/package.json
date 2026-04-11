@@ -1,0 +1,12 @@
+{
+  "name": "@adminyo/cli-linux-x64",
+  "version": "0.2.0",
+  "description": "Adminyo native binary for Linux x64",
+  "license": "MIT",
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "bin": {
+    "nyo": "nyo"
+  },
+  "files": ["nyo"]
+}
