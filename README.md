@@ -37,21 +37,8 @@ Version `@adminyo/cli` and every `@adminyo/cli-*` package with the same semver.
 
 Static hosting: set `auth` in `adminyo.yml` so the SPA logs in against your API and stores the token in `sessionStorage`. The browser calls `baseUrl` directly; your API must allow CORS for the panel origin. Define `columns` per entity in YAML if the API is not reachable at build time (live inference is skipped for `nyo build`).
 
-## Build from source
 
-1. Build the UI (required before `cargo build` because assets are embedded):
-
-   ```bash
-   cd ui && npm ci && npm run build
-   ```
-
-2. Build the CLI:
-
-   ```bash
-   cd cli && cargo build --release
-   ```
-
-## REST conventions (MVP)
+## REST conventions 
 
 - **List**: `GET {entity.endpoint}` — JSON array at root or first object key whose value is an array of objects.
 - **Detail**: `GET {endpoint}/{id}`
