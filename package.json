@@ -1,0 +1,43 @@
+{
+  "name": "@adminyo/cli",
+  "version": "0.2.0",
+  "description": "YAML-driven admin panel (native CLI via optional platform packages)",
+  "license": "MIT",
+  "homepage": "https://github.com/felipeinf/adminyo#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/felipeinf/adminyo.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build:ui": "npm run build --prefix ui",
+    "build:rust": "cargo build --manifest-path cli/Cargo.toml --release",
+    "sync:native": "node scripts/sync-native-bin.js",
+    "build:native": "npm run build:ui && npm run build:rust && npm run sync:native",
+    "build:native:all": "bash scripts/build-all-native.sh",
+    "pack:root": "npm pack --dry-run",
+    "pack:native": "npm run build:native && cd npm/$(node scripts/sync-native-bin.js --print-dir) && npm pack --dry-run",
+    "publish:native": "npm run build:native && cd npm/$(node scripts/sync-native-bin.js --print-dir) && npm publish --access public",
+    "publish:native:dry": "npm run build:native && cd npm/$(node scripts/sync-native-bin.js --print-dir) && npm publish --dry-run --access public",
+    "publish:root": "npm publish --access public",
+    "publish:root:dry": "npm publish --dry-run --access public",
+    "publish:native:all": "for d in darwin-arm64 darwin-x64 linux-arm64 linux-x64 win32-x64; do ( cd \"npm/$d\" && npm publish --access public ) || exit 1; done"
+  },
+  "bin": {
+    "nyo": "bin/nyo.js"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "optionalDependencies": {
+    "@adminyo/cli-darwin-arm64": "0.2.0",
+    "@adminyo/cli-darwin-x64": "0.2.0",
+    "@adminyo/cli-linux-x64": "0.2.0",
+    "@adminyo/cli-linux-arm64": "0.2.0",
+    "@adminyo/cli-win32-x64": "0.2.0"
+  }
+}
