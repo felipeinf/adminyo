@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;           /* Blanco puro */
+    --foreground: 0 0% 5%;             /* Casi negro (#0D0D0D) */
+    --card: 0 0% 100%;                 /* Blanco */
+    --card-foreground: 0 0% 5%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 5%;
+    --muted: 0 0% 45%;                 /* Gris medio (#737373) */
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 74% 50%;               /* Rojo para destructive */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 92%;                /* Gris muy claro (#EBEBEB) */
+    --input: 0 0% 96%;
+    --ring: 262 80% 50%;               /* Primary */
+    --primary: 262 80% 50%;            /* Indigo (#6C5CE7) */
+    --primary-gradient: none;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 5%;
+    --radius: 0.5rem;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
