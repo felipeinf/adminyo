@@ -1,0 +1,12 @@
+{
+  "name": "@adminyo/cli-darwin-x64",
+  "version": "0.2.0",
+  "description": "Adminyo native binary for macOS x64",
+  "license": "MIT",
+  "os": ["darwin"],
+  "cpu": ["x64"],
+  "bin": {
+    "nyo": "nyo"
+  },
+  "files": ["nyo"]
+}

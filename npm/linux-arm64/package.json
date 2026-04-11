@@ -1,0 +1,12 @@
+{
+  "name": "@adminyo/cli-linux-arm64",
+  "version": "0.2.0",
+  "description": "Adminyo native binary for Linux ARM64",
+  "license": "MIT",
+  "os": ["linux"],
+  "cpu": ["arm64"],
+  "bin": {
+    "nyo": "nyo"
+  },
+  "files": ["nyo"]
+}
