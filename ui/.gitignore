@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env.local
+.env.*
+*.log
+*.tsbuildinfo
+
+# Vite / React specific
+.vite/
+coverage/
+*.local
+
+# OS files
+.DS_Store
+Thumbs.db
