@@ -8,6 +8,17 @@ declare global {
 
 export const NYO_TOKEN_KEY = "nyo_api_token";
 
+export class ConfigFetchUnauthorized extends Error {
+  constructor() {
+    super("config requires authentication");
+    this.name = "ConfigFetchUnauthorized";
+  }
+}
+
+export function isConfigFetchUnauthorized(e: unknown): boolean {
+  return e instanceof ConfigFetchUnauthorized;
+}
+
 export function isStaticMode(): boolean {
   return typeof window !== "undefined" && Boolean(window.__NYO_CONFIG_URL__);
 }
@@ -59,6 +70,9 @@ export async function fetchConfig(): Promise<AdminyoConfig> {
   }
   const res = await fetch("/adminyo-config", { credentials: "include" });
   if (!res.ok) {
+    if (res.status === 401) {
+      throw new ConfigFetchUnauthorized();
+    }
     const j = (await res.json().catch(() => ({}))) as { error?: string };
     const detail = j.error ? `: ${j.error}` : "";
     throw new Error(`Failed to fetch config (${res.status})${detail}`);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchConfig } from "../lib/api";
+import { fetchConfig, isConfigFetchUnauthorized } from "../lib/api";
 import { applyBrandingColor } from "../lib/brandingColor";
 import type { AdminyoConfig } from "../types/config";
 
@@ -35,7 +35,12 @@ export function useConfig(): UseConfigResult {
         root.style.removeProperty("--primary-foreground");
       }
     } catch (e) {
-      setError(String(e));
+      if (isConfigFetchUnauthorized(e)) {
+        setConfig(null);
+        setError(null);
+      } else {
+        setError(String(e));
+      }
     } finally {
       setLoading(false);
     }

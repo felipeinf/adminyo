@@ -29,6 +29,7 @@ export interface BrandingConfig {
 export interface AuthConfig {
     loginEndpoint: string;
     tokenPath?: string;
+    tokenScheme?: string;
     usernameField?: string;
     passwordField?: string;
 }

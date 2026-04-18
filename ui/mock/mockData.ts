@@ -5,6 +5,11 @@ export const MOCK_CONFIG: AdminyoConfig = {
     name: "Adminyo (mock)",
     primaryColor: "linear-gradient(135deg, #4f46e5 0%, #7c72ff 100%)",
   },
+  auth: {
+    loginEndpoint: "/mock-api/v1/auth/login",
+    usernameField: "email",
+    passwordField: "password",
+  },
   entities: [
     {
       name: "Users",

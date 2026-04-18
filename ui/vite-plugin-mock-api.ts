@@ -34,13 +34,23 @@ export function adminyoMockApiPlugin(): Plugin {
           !path.startsWith("/auth/") &&
           path !== "/adminyo-config" &&
           path !== "/adminyo-public-config" &&
-          !path.startsWith("/adminyo-proxy/")
+          !path.startsWith("/adminyo-proxy/") &&
+          !path.startsWith("/mock-api/")
         ) {
           return next();
         }
 
         if (path === "/auth/me" && req.method === "GET") {
           sendEmpty(res, 200);
+          return;
+        }
+
+        if (path === "/mock-api/v1/auth/login" && req.method === "POST") {
+          await readBody(req);
+          sendJson(res, {
+            access_token: "mock-api-bearer-token",
+            token_type: "Bearer",
+          });
           return;
         }
 
