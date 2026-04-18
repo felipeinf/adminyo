@@ -4,7 +4,8 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use serde_json::{json, Value};
+use reqwest::Url;
+use serde_json::{json, Map, Value};
 use std::sync::Arc;
 
 use crate::config::canonicalize_logo_path;
@@ -12,13 +13,15 @@ use crate::config::contrast_foreground_hsl;
 use crate::config::schema::{Column, Entity};
 use crate::config::{assign_entity_slugs, load_adminyo, load_envs, resolve_environment};
 use crate::embedded::Asset;
+use crate::server::proxy::apply_resolved_env_and_session;
 use crate::server::auth::{
     clear_auth_cookie, create_token, ct_eq_str, parse_and_verify, set_auth_cookie,
     token_from_cookie, unauthorized_response, verify_password, AuthUser, LoginBody,
 };
 use crate::state::SchemaCacheKey;
 use crate::state::{
-    extract_first_object_array, infer_columns_from_row, AppState, InnerState, CONFIG_VERSION,
+    extract_first_object_array, infer_columns_from_row, resolve_upstream_session_token,
+    AppState, InnerState, SessionToken, CONFIG_VERSION,
 };
 
 pub(crate) enum BuildConfigError {
@@ -49,7 +52,16 @@ pub async fn auth_me(
     (StatusCode::OK, Json(json!({ "ok": true, "user": claims.sub }))).into_response()
 }
 
-pub async fn logout() -> impl IntoResponse {
+pub async fn logout(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Some(token) = token_from_cookie(&headers) {
+        if let Ok(claims) = parse_and_verify(&state.jwt_secret, token) {
+            let mut m = state.session_tokens.write().await;
+            m.remove(&claims.sub);
+        }
+    }
     let cookie = clear_auth_cookie();
     (
         StatusCode::OK,
@@ -59,10 +71,151 @@ pub async fn logout() -> impl IntoResponse {
         .into_response()
 }
 
+fn extract_upstream_error_message(body: &[u8]) -> String {
+    if let Ok(v) = serde_json::from_slice::<Value>(body) {
+        if let Some(s) = v.get("error").and_then(|x| x.as_str()) {
+            return s.to_string();
+        }
+        if let Some(s) = v.get("message").and_then(|x| x.as_str()) {
+            return s.to_string();
+        }
+    }
+    let t = String::from_utf8_lossy(body);
+    let t = t.trim();
+    if t.is_empty() {
+        "login failed".into()
+    } else {
+        t.chars().take(500).collect()
+    }
+}
+
 pub async fn login(
     State(state): State<Arc<AppState>>,
     Json(body): Json<LoginBody>,
 ) -> impl IntoResponse {
+    let (auth_opt, base_url) = {
+        let inner = state.inner.read().await;
+        (inner.adminyo.auth.clone(), inner.resolved.base_url.clone())
+    };
+
+    if let Some(auth_cfg) = auth_opt {
+        let login_url = match Url::parse(base_url.trim_end_matches('/'))
+            .and_then(|u| u.join(auth_cfg.login_endpoint.trim_start_matches('/')))
+        {
+            Ok(u) => u,
+            Err(e) => {
+                tracing::error!(error = %e, "invalid auth login URL");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": "invalid auth login URL in config"})),
+                )
+                    .into_response();
+            }
+        };
+
+        let mut map = Map::new();
+        map.insert(
+            auth_cfg.username_field.clone(),
+            Value::String(body.user.clone()),
+        );
+        map.insert(
+            auth_cfg.password_field.clone(),
+            Value::String(body.pass.clone()),
+        );
+        let payload = Value::Object(map);
+
+        let upstream = match state
+            .http
+            .post(login_url.clone())
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!(error = %e, url = %login_url, "upstream auth request failed");
+                return (
+                    StatusCode::BAD_GATEWAY,
+                    Json(json!({"error": format!("auth request failed: {e}")})),
+                )
+                    .into_response();
+            }
+        };
+
+        let status = upstream.status();
+        let bytes = match upstream.bytes().await {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::error!(error = %e, "read upstream auth body");
+                return (
+                    StatusCode::BAD_GATEWAY,
+                    Json(json!({"error": format!("read auth response: {e}")})),
+                )
+                    .into_response();
+            }
+        };
+
+        if !status.is_success() {
+            let code = StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+            let msg = extract_upstream_error_message(&bytes);
+            return (code, Json(json!({"error": msg}))).into_response();
+        }
+
+        let root: Value = match serde_json::from_slice(&bytes) {
+            Ok(v) => v,
+            Err(_) => {
+                return (
+                    StatusCode::BAD_GATEWAY,
+                    Json(json!({"error": "auth response is not valid JSON"})),
+                )
+                    .into_response();
+            }
+        };
+
+        let resolved = match resolve_upstream_session_token(&root, &auth_cfg) {
+            Ok(r) => r,
+            Err(msg) => {
+                return (
+                    StatusCode::BAD_GATEWAY,
+                    Json(json!({"error": msg})),
+                )
+                    .into_response();
+            }
+        };
+        if let Some(ref path) = resolved.detected_path {
+            tracing::info!(
+                path = %path,
+                scheme = %resolved.token.scheme,
+                "resolved upstream auth token"
+            );
+        }
+
+        {
+            let mut m = state.session_tokens.write().await;
+            m.insert(body.user.clone(), resolved.token);
+        }
+
+        let token = match create_token(&state.jwt_secret, &body.user) {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::error!(error = %e, "JWT encode failed on login");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("{e}")})),
+                )
+                    .into_response();
+            }
+        };
+        let cookie = set_auth_cookie(&token);
+        return (
+            StatusCode::OK,
+            [(header::SET_COOKIE, cookie)],
+            Json(json!({"ok": true})),
+        )
+            .into_response();
+    }
+
     if !ct_eq_str(&state.admin_user, &body.user) {
         return (
             StatusCode::UNAUTHORIZED,
@@ -127,9 +280,13 @@ fn branding_logo_url(state: &AppState, inner: &InnerState) -> Option<String> {
 
 pub async fn adminyo_config(
     State(state): State<Arc<AppState>>,
-    Extension(_auth): Extension<AuthUser>,
+    Extension(auth_user): Extension<AuthUser>,
 ) -> impl IntoResponse {
-    match build_config_response(&state, ConfigBuildKind::Server).await {
+    let inference_session = {
+        let m = state.session_tokens.read().await;
+        m.get(&auth_user.0).cloned()
+    };
+    match build_config_response(&state, ConfigBuildKind::Server, inference_session).await {
         Ok(v) => Json(v).into_response(),
         Err(BuildConfigError::Inference(msg)) => {
             tracing::error!(error = %msg, "adminyo-config schema inference failed");
@@ -153,6 +310,7 @@ pub async fn adminyo_config(
 pub(crate) async fn build_config_response(
     state: &AppState,
     kind: ConfigBuildKind,
+    inference_session: Option<SessionToken>,
 ) -> Result<Value, BuildConfigError> {
     let (branding, active_env, slugs, entities) = {
         let inner = state.inner.read().await;
@@ -172,9 +330,10 @@ pub(crate) async fn build_config_response(
         .primary_color
         .as_deref()
         .and_then(contrast_foreground_hsl);
+    let session_ref = inference_session.as_ref();
     let mut entities_out = Vec::new();
     for (i, e) in entities.iter().enumerate() {
-        let cols = infer_entity_columns(state, e, kind).await?;
+        let cols = infer_entity_columns(state, e, kind, session_ref).await?;
         entities_out.push(json!({
             "name": e.name,
             "slug": slugs[i],
@@ -205,6 +364,7 @@ async fn infer_entity_columns(
     state: &AppState,
     entity: &Entity,
     kind: ConfigBuildKind,
+    inference_session: Option<&SessionToken>,
 ) -> Result<Vec<Column>, BuildConfigError> {
     if let Some(cols) = &entity.columns {
         return Ok(cols.clone());
@@ -237,10 +397,7 @@ async fn infer_entity_columns(
     let url = crate::server::proxy::join_url_for_test(&base, path, "").map_err(|m| {
         BuildConfigError::Internal(anyhow::anyhow!("invalid upstream URL: {m}"))
     })?;
-    let mut req = state.http.get(&url);
-    for (k, v) in &headers {
-        req = req.header(k.as_str(), v.as_str());
-    }
+    let req = apply_resolved_env_and_session(state.http.get(&url), &headers, inference_session);
     let resp = req.send().await.map_err(|e| {
         BuildConfigError::Inference(format!(
             "Schema inference for \"{}\" failed: could not reach API ({})",

@@ -1,14 +1,41 @@
 use axum::{
     body::Body,
-    extract::State,
+    extract::{Extension, State},
     http::{HeaderName, HeaderValue, Request, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
+use reqwest::header::AUTHORIZATION;
 use reqwest::Url;
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::state::AppState;
+use crate::server::auth::AuthUser;
+use crate::state::{AppState, SessionToken};
+
+pub fn apply_resolved_env_and_session(
+    mut rb: reqwest::RequestBuilder,
+    env_headers: &HashMap<String, String>,
+    session_token: Option<&SessionToken>,
+) -> reqwest::RequestBuilder {
+    let use_session_auth = session_token.is_some();
+    for (k, v) in env_headers {
+        if k.eq_ignore_ascii_case("authorization") && use_session_auth {
+            continue;
+        }
+        if let (Ok(name), Ok(val)) = (
+            HeaderName::try_from(k.as_str()),
+            HeaderValue::try_from(v.as_str()),
+        ) {
+            rb = rb.header(name, val);
+        }
+    }
+    if let Some(SessionToken { scheme, value }) = session_token {
+        let auth_value = format!("{scheme} {value}");
+        rb = rb.header(AUTHORIZATION, auth_value.as_str());
+    }
+    rb
+}
 
 const HOP_HEADERS: &[&str] = &[
     "connection",
@@ -22,7 +49,18 @@ const HOP_HEADERS: &[&str] = &[
     "host",
 ];
 
-pub async fn proxy_request(State(state): State<Arc<AppState>>, req: Request<Body>) -> Response {
+pub async fn proxy_request(
+    State(state): State<Arc<AppState>>,
+    Extension(auth_user): Extension<AuthUser>,
+    req: Request<Body>,
+) -> Response {
+    let user_sub = auth_user.0.clone();
+    let session_token = {
+        let m = state.session_tokens.read().await;
+        m.get(&user_sub).cloned()
+    };
+    let use_session_auth = session_token.is_some();
+
     let inner = state.inner.read().await;
     let base = inner.resolved.base_url.clone();
     let env_headers = inner.resolved.headers.clone();
@@ -53,14 +91,7 @@ pub async fn proxy_request(State(state): State<Arc<AppState>>, req: Request<Body
     };
 
     let mut rb = state.http.request(method.clone(), target);
-    for (k, v) in &env_headers {
-        if let (Ok(name), Ok(val)) = (
-            HeaderName::try_from(k.as_str()),
-            HeaderValue::try_from(v.as_str()),
-        ) {
-            rb = rb.header(name, val);
-        }
-    }
+    rb = apply_resolved_env_and_session(rb, &env_headers, session_token.as_ref());
 
     let skip_client_auth = env_headers
         .keys()
@@ -70,7 +101,10 @@ pub async fn proxy_request(State(state): State<Arc<AppState>>, req: Request<Body
         if HOP_HEADERS.contains(&name.as_str()) {
             continue;
         }
-        if name == "cookie" || (name == "authorization" && skip_client_auth) {
+        if name == "cookie" {
+            continue;
+        }
+        if name == "authorization" && (skip_client_auth || use_session_auth) {
             continue;
         }
         rb = rb.header(k, v);
@@ -93,6 +127,10 @@ pub async fn proxy_request(State(state): State<Arc<AppState>>, req: Request<Body
     };
 
     let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    if status == StatusCode::UNAUTHORIZED && use_session_auth {
+        let mut m = state.session_tokens.write().await;
+        m.remove(&user_sub);
+    }
     let mut res = Response::builder().status(status);
     for (k, v) in resp.headers().iter() {
         let name = k.as_str().to_lowercase();

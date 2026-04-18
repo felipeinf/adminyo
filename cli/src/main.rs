@@ -189,11 +189,9 @@ fn cmd_validate(dir: &Path, env_name: &str) -> anyhow::Result<()> {
 
 async fn cmd_dev(dir: &Path, env_name: &str, host: &str, port: u16) -> anyhow::Result<()> {
     load_dotenv_from_project(dir);
-    let admin_user = std::env::var("ADMINYO_USER").context("ADMINYO_USER must be set")?;
-    let admin_pass = std::env::var("ADMINYO_PASS").context("ADMINYO_PASS must be set")?;
     let jwt_secret = std::env::var("ADMINYO_SECRET").context("ADMINYO_SECRET must be set")?;
-    if admin_user.is_empty() || admin_pass.is_empty() || jwt_secret.is_empty() {
-        anyhow::bail!("ADMINYO_USER, ADMINYO_PASS, ADMINYO_SECRET must be non-empty");
+    if jwt_secret.is_empty() {
+        anyhow::bail!("ADMINYO_SECRET must be non-empty");
     }
 
     let config_dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
@@ -207,6 +205,22 @@ async fn cmd_dev(dir: &Path, env_name: &str, host: &str, port: u16) -> anyhow::R
         .ok_or_else(|| anyhow::anyhow!("environment {env_name} not defined"))?;
     let resolved = resolve_environment(raw)?;
 
+    let (admin_user, admin_pass) = if adminyo.auth.is_some() {
+        (
+            std::env::var("ADMINYO_USER").unwrap_or_default(),
+            std::env::var("ADMINYO_PASS")
+                .unwrap_or_default()
+                .into_bytes(),
+        )
+    } else {
+        let admin_user = std::env::var("ADMINYO_USER").context("ADMINYO_USER must be set")?;
+        let admin_pass = std::env::var("ADMINYO_PASS").context("ADMINYO_PASS must be set")?;
+        if admin_user.is_empty() || admin_pass.is_empty() {
+            anyhow::bail!("ADMINYO_USER and ADMINYO_PASS must be non-empty when adminyo.yml has no auth block");
+        }
+        (admin_user, admin_pass.into_bytes())
+    };
+
     let inner = InnerState::new(adminyo, envs, env_name.to_string(), resolved);
     let (ws_tx, _) = tokio::sync::broadcast::channel(32);
     let http = reqwest::Client::builder()
@@ -217,8 +231,9 @@ async fn cmd_dev(dir: &Path, env_name: &str, host: &str, port: u16) -> anyhow::R
         inner: Arc::new(RwLock::new(inner)),
         config_dir: config_dir.clone(),
         admin_user,
-        admin_pass: admin_pass.into_bytes(),
+        admin_pass,
         jwt_secret: jwt_secret.into_bytes(),
+        session_tokens: Arc::new(RwLock::new(std::collections::HashMap::new())),
         ws_tx,
         http,
     });
@@ -285,11 +300,12 @@ async fn cmd_build(dir: &Path, env_name: &str, out: &Path) -> anyhow::Result<()>
         admin_user: String::new(),
         admin_pass: Vec::new(),
         jwt_secret: b"nyo-build-placeholder-not-for-jwt01".to_vec(),
+        session_tokens: Arc::new(RwLock::new(std::collections::HashMap::new())),
         ws_tx,
         http,
     });
 
-    let mut config_json = build_config_response(&state, ConfigBuildKind::StaticBundle)
+    let mut config_json = build_config_response(&state, ConfigBuildKind::StaticBundle, None)
         .await
         .map_err(|e| match e {
             BuildConfigError::Inference(m) => anyhow::anyhow!("{m}"),
@@ -386,6 +402,8 @@ entities:
     actions:
       - list
       - detail
+
+# Optional: copy the `auth` block from nyo.example.yml to validate panel login against your API (baseUrl + loginEndpoint).
 "##;
 
 const NYO_EXAMPLE_YML: &str = r##"branding:
@@ -395,7 +413,6 @@ const NYO_EXAMPLE_YML: &str = r##"branding:
 
 auth:
   loginEndpoint: /api/auth/login
-  tokenPath: token
   usernameField: email
   passwordField: password
 

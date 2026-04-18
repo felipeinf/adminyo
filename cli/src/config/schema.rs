@@ -22,10 +22,6 @@ fn default_theme() -> Theme {
     Theme::Light
 }
 
-fn default_auth_token_path() -> String {
-    "token".into()
-}
-
 fn default_auth_username_field() -> String {
     "email".into()
 }
@@ -38,8 +34,10 @@ fn default_auth_password_field() -> String {
 #[serde(rename_all = "camelCase")]
 pub struct AuthConfig {
     pub login_endpoint: String,
-    #[serde(default = "default_auth_token_path")]
-    pub token_path: String,
+    #[serde(default)]
+    pub token_path: Option<String>,
+    #[serde(default)]
+    pub token_scheme: Option<String>,
     #[serde(default = "default_auth_username_field")]
     pub username_field: String,
     #[serde(default = "default_auth_password_field")]
