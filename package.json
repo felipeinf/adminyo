@@ -1,6 +1,6 @@
 {
   "name": "@adminyo/cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "YAML-driven admin panel (native CLI via optional platform packages)",
   "license": "MIT",
   "homepage": "https://github.com/felipeinf/adminyo#readme",
@@ -34,10 +34,10 @@
     "LICENSE"
   ],
   "optionalDependencies": {
-    "@adminyo/cli-darwin-arm64": "0.2.0",
-    "@adminyo/cli-darwin-x64": "0.2.0",
-    "@adminyo/cli-linux-x64": "0.2.0",
-    "@adminyo/cli-linux-arm64": "0.2.0",
-    "@adminyo/cli-win32-x64": "0.2.0"
+    "@adminyo/cli-darwin-arm64": "0.3.0",
+    "@adminyo/cli-darwin-x64": "0.3.0",
+    "@adminyo/cli-linux-x64": "0.3.0",
+    "@adminyo/cli-linux-arm64": "0.3.0",
+    "@adminyo/cli-win32-x64": "0.3.0"
   }
 }
