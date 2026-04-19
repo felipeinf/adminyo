@@ -2,8 +2,25 @@
   "name": "@adminyo/cli",
   "version": "0.3.0",
   "description": "YAML-driven admin panel (native CLI via optional platform packages)",
+  "keywords": [
+    "rust",
+    "admin",
+    "admin-panel",
+    "backoffice",
+    "yaml",
+    "yaml-config",
+    "declarative",
+    "configuration",
+    "whitelabel",
+    "white-label",
+    "crud",
+    "rest-api",
+    "api-proxy",
+    "dashboard",
+    "internal-tools"
+  ],
   "license": "MIT",
-  "homepage": "https://github.com/felipeinf/adminyo#readme",
+  "homepage": "https://adminyo.felipeinf.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/felipeinf/adminyo.git"
