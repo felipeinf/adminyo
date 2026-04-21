@@ -1,4 +1,15 @@
-# Adminyo
+<p align="center">
+  <img src="img/adminyo-img-0.svg" alt="Adminyo" width="128" height="128" />
+</p>
+
+<h1 align="center">Adminyo</h1>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@adminyo/cli"><img src="https://img.shields.io/npm/v/@adminyo/cli?label=npm&logo=npm" alt="npm package" /></a>
+  <a href="https://github.com/felipeinf/adminyo/stargazers"><img src="https://img.shields.io/github/stars/felipeinf/adminyo?style=social" alt="GitHub stars" /></a>
+</p>
+
+<p align="center"><code>rust</code> · <code>admin</code> · <code>dashboard</code> · <code>yml</code> · <code>whitelabel</code></p>
 
 Generic admin panel driven by YAML, backed by a Rust binary and a pre-built React UI. Distributed via npm with native optional dependencies.
 
