@@ -1,0 +1,122 @@
+# Publishes all @adminyo/cli-* native packages, then @adminyo/cli.
+# Repository secret: NPM_TOKEN (granular publish token for scope @adminyo).
+
+name: Publish native CLI packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-and-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Zig
+        run: |
+          curl -sSL "https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz" -o zig.tar.xz
+          tar -xf zig.tar.xz
+          echo "$(pwd)/zig-linux-x86_64-0.13.0" >> "$GITHUB_PATH"
+
+      - name: Install cargo-zigbuild
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build UI
+        run: npm ci --prefix ui && npm run build --prefix ui
+
+      - name: Cross-build CLI
+        working-directory: cli
+        run: |
+          rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-pc-windows-gnu
+          cargo zigbuild --release --target x86_64-unknown-linux-gnu
+          cargo zigbuild --release --target aarch64-unknown-linux-gnu
+          cargo zigbuild --release --target x86_64-pc-windows-gnu
+
+      - name: Stage npm native folders
+        run: |
+          cp cli/target/x86_64-unknown-linux-gnu/release/nyo npm/linux-x64/nyo
+          chmod +x npm/linux-x64/nyo
+          cp cli/target/aarch64-unknown-linux-gnu/release/nyo npm/linux-arm64/nyo
+          chmod +x npm/linux-arm64/nyo
+          cp cli/target/x86_64-pc-windows-gnu/release/nyo.exe npm/win32-x64/nyo.exe
+
+      - name: npm publish (linux + windows)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          printf '%s\n' "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          ( cd npm/linux-x64 && npm publish --access public )
+          ( cd npm/linux-arm64 && npm publish --access public )
+          ( cd npm/win32-x64 && npm publish --access public )
+          rm -f ~/.npmrc
+
+  macos-darwin:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build UI
+        run: npm ci --prefix ui && npm run build --prefix ui
+
+      - name: Build CLI (Apple Silicon + Intel)
+        working-directory: cli
+        run: |
+          cargo build --release --target aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+
+      - name: Stage npm native folders
+        run: |
+          cp cli/target/aarch64-apple-darwin/release/nyo npm/darwin-arm64/nyo
+          chmod +x npm/darwin-arm64/nyo
+          cp cli/target/x86_64-apple-darwin/release/nyo npm/darwin-x64/nyo
+          chmod +x npm/darwin-x64/nyo
+
+      - name: npm publish (darwin)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          printf '%s\n' "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          ( cd npm/darwin-arm64 && npm publish --access public )
+          ( cd npm/darwin-x64 && npm publish --access public )
+          rm -f ~/.npmrc
+
+  publish-meta:
+    needs: [linux-and-windows, macos-darwin]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: npm publish @adminyo/cli
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          printf '%s\n' "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          npm publish --access public
+          rm -f ~/.npmrc

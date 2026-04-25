@@ -1,0 +1,11 @@
+/target/
+**/*.rs.bk
+node_modules/
+.DS_Store
+.env
+*.log
+
+AGENTS.md
+_demo/
+.claude/
+.npmignore

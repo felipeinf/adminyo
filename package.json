@@ -1,23 +1,17 @@
 {
   "name": "@adminyo/cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "YAML-driven admin panel (native CLI via optional platform packages)",
   "keywords": [
     "rust",
     "admin",
+    "dashboard",
+    "yml",
+    "whitelabel",
     "admin-panel",
     "backoffice",
     "yaml",
-    "yaml-config",
-    "declarative",
-    "configuration",
-    "whitelabel",
-    "white-label",
-    "crud",
-    "rest-api",
-    "api-proxy",
-    "dashboard",
-    "internal-tools"
+    "multi-tenant"
   ],
   "license": "MIT",
   "homepage": "https://adminyo.felipeinf.com",
@@ -51,10 +45,10 @@
     "LICENSE"
   ],
   "optionalDependencies": {
-    "@adminyo/cli-darwin-arm64": "0.3.0",
-    "@adminyo/cli-darwin-x64": "0.3.0",
-    "@adminyo/cli-linux-x64": "0.3.0",
-    "@adminyo/cli-linux-arm64": "0.3.0",
-    "@adminyo/cli-win32-x64": "0.3.0"
+    "@adminyo/cli-darwin-arm64": "0.3.1",
+    "@adminyo/cli-darwin-x64": "0.3.1",
+    "@adminyo/cli-linux-x64": "0.3.1",
+    "@adminyo/cli-linux-arm64": "0.3.1",
+    "@adminyo/cli-win32-x64": "0.3.1"
   }
 }
